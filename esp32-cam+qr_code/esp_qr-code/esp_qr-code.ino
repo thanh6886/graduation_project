@@ -29,9 +29,7 @@ TaskHandle_t QRCodeReader_Task;
 #else
   #error "Camera model not selected"
 #endif
-/* ======================================== */
 
-/* ======================================== Variables declaration */
 struct QRCodeData
 {
   bool valid;
@@ -48,9 +46,7 @@ struct quirc_data data;
 quirc_decode_error_t err;
 struct QRCodeData qrCodeData;  
 String QRCodeResult = "";
-/* ======================================== */
 
-/* ________________________________________________________________________________ VOID SETTUP() */
 void setup() {
   // put your setup code here, to run once:
 
