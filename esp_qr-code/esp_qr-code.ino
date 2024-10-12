@@ -1,11 +1,7 @@
-
 #include "esp_camera.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "quirc.h"
-
-TaskHandle_t QRCodeReader_Task; 
-
 
 #define CAMERA_MODEL_AI_THINKER
 #if defined(CAMERA_MODEL_AI_THINKER)
@@ -29,7 +25,6 @@ TaskHandle_t QRCodeReader_Task;
 #else
   #error "Camera model not selected"
 #endif
-
 struct QRCodeData
 {
   bool valid;
@@ -39,6 +34,7 @@ struct QRCodeData
 };
 
 struct quirc *q = NULL;
+struct quirc *qr_recognizer = NULL;
 uint8_t *image = NULL;  
 camera_fb_t * fb = NULL;
 struct quirc_code code;
@@ -47,20 +43,26 @@ quirc_decode_error_t err;
 struct QRCodeData qrCodeData;  
 String QRCodeResult = "";
 
-void setup() {
-  // put your setup code here, to run once:
 
-  // Disable brownout detector.
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+TaskHandle_t QRCodeReader_Task; 
 
-  /* ---------------------------------------- Init serial communication speed (baud rate). */
+void setup(){
   Serial.begin(115200);
   Serial.setDebugOutput(true);
   Serial.println();
-  /* ---------------------------------------- */
-
-  /* ---------------------------------------- Camera configuration. */
   Serial.println("Start configuring and initializing the camera...");
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  setup_esp32_cam();
+
+
+  xTaskCreatePinnedToCore(QRCodeReader, "QRCodeReader_Task", 20000, NULL, 1, &QRCodeReader_Task, 0);
+}
+
+void loop(){
+
+}
+
+void setup_esp32_cam(){
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -80,12 +82,12 @@ void setup() {
   config.pin_sscb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 10000000;
+  config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_GRAYSCALE;
   config.frame_size = FRAMESIZE_QVGA;
-  config.jpeg_quality = 15;
+  config.jpeg_quality = 12;
   config.fb_count = 1;
-  
+
 
 
   esp_err_t err = esp_camera_init(&config);
@@ -93,62 +95,43 @@ void setup() {
     Serial.printf("Camera init failed with error 0x%x", err);
     ESP.restart();
   }
-  
+
   sensor_t * s = esp_camera_sensor_get();
+  if (s->id.PID == OV3660_PID) {
+    s->set_vflip(s, 1);        // flip it back
+    s->set_brightness(s, 1);   // up the brightness just a bit
+    s->set_saturation(s, -2);  // lower the saturation
+  }
   s->set_framesize(s, FRAMESIZE_QVGA);
-  
+
   Serial.println("Configure and initialize the camera successfully.");
   Serial.println();
-  /* ---------------------------------------- */
-
-  /* ---------------------------------------- create "QRCodeReader_Task" using the xTaskCreatePinnedToCore() function */
-  xTaskCreatePinnedToCore(
-             QRCodeReader,          /* Task function. */
-             "QRCodeReader_Task",   /* name of task. */
-             10000,                 /* Stack size of task */
-             NULL,                  /* parameter of the task */
-             1,                     /* priority of the task */
-             &QRCodeReader_Task,    /* Task handle to keep track of created task */
-             0);                    /* pin task to core 0 */
-  /* ---------------------------------------- */
 }
-/* ________________________________________________________________________________ */
-void loop() {
-  // put your main code here, to run repeatedly:
-  delay(1);
-}
-/* ________________________________________________________________________________ */
 
-/* ________________________________________________________________________________ The function to be executed by "QRCodeReader_Task" */
-// This function is to instruct the camera to take or capture a QR Code image, then it is processed and translated into text.
+
+
+
 void QRCodeReader( void * pvParameters ){
-  /* ---------------------------------------- */
+
   Serial.println("QRCodeReader is ready.");
   Serial.print("QRCodeReader running on core ");
   Serial.println(xPortGetCoreID());
   Serial.println();
-  /* ---------------------------------------- */
-
-  /* ---------------------------------------- Loop to read QR Code in real time. */
   while(1){
-      q = quirc_new();
-      if (q == NULL){
+  fb = esp_camera_fb_get();
+  q = quirc_new();
+  if (q == NULL){
         Serial.print("can't create quirc object\r\n");  
-        continue;
+       continue;
       }
-    
-      fb = esp_camera_fb_get();
-      if (!fb)
-      {
-        Serial.println("Camera capture failed");
-        continue;
-      }   
-      
-      quirc_resize(q, fb->width, fb->height);
+  if (!fb){
+    Serial.println("Camera capture failed");
+    continue;
+    }   
+    quirc_resize(q, fb->width, fb->height);
       image = quirc_begin(q, NULL, NULL);
       memcpy(image, fb->buf, fb->len);
       quirc_end(q);
-      
       int count = quirc_count(q);
       if (count > 0) {
         quirc_extract(q, 0, &code);
@@ -160,14 +143,15 @@ void QRCodeReader( void * pvParameters ){
         } else {
           Serial.printf("Decoding successful:\n");
           dumpData(&data);
+                   vTaskSuspend(QRCodeReader_Task);
         } 
         Serial.println();
       } 
-      
       esp_camera_fb_return(fb);
       fb = NULL;
       image = NULL;  
       quirc_destroy(q);
+        
   }
   /* ---------------------------------------- */
 }
@@ -184,5 +168,5 @@ void dumpData(const struct quirc_data *data)
   
   QRCodeResult = (const char *)data->payload;
 }
-/* ________________________________________________________________________________ */
-//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
