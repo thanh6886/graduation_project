@@ -44,9 +44,10 @@ struct QRCodeData qrCodeData;
 String QRCodeResult = "";
 BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 SemaphoreHandle_t xSemaphoreQRScan;
-TaskHandle_t QRCodeReader_Task; 
-TaskHandle_t TaskReturnSemaphore_T; 
 
+
+TaskHandle_t QRCodeReader_Task; 
+TaskHandle_t ReceiveUART_Task;
 
 
 
@@ -58,19 +59,11 @@ void setup(){
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   setup_esp32_cam();
   xSemaphoreQRScan = xSemaphoreCreateBinary();
-  xTaskCreatePinnedToCore(QRCodeReader, "QRCodeReader_Task", 20000, NULL, 1, &QRCodeReader_Task, 0);
-  xTaskCreatePinnedToCore(
-    TaskReceiveUART,     // Hàm task
-    "TaskReceiveUART",   // Tên task
-    2048,                // Kích thước stack
-    NULL,                // Tham số cho task
-    1,                   // Độ ưu tiên
-    NULL,                // Không cần handle
-    1);                  // Chạy trên core 1
+  xTaskCreatePinnedToCore(QRCodeReader, "QRCodeReader_Task", 10000, NULL, 1, &QRCodeReader_Task, 0);
+  xTaskCreatePinnedToCore(ReceiveUART_Task,"ReceiveUART_Task", 2048, NULL, 1, &ReceiveUART_Task, 1);
 }
 
 void loop(){
-
 }
 
 void setup_esp32_cam(){
@@ -119,7 +112,7 @@ void setup_esp32_cam(){
   Serial.println();
 }
 
-void TaskReceiveUART(void *pvParameters) {
+void ReceiveUART_Task(void *pvParameters) {
   while (1) {
     // Kiểm tra xem có dữ liệu từ Serial không
     if (Serial.available() > 0) {
@@ -127,6 +120,8 @@ void TaskReceiveUART(void *pvParameters) {
       if (receivedChar == 'a') {
         Serial.println("Received 'a', giving semaphore...");
         xSemaphoreGive(xSemaphoreQRScan);  // Trả về semaphore
+        
+        vTaskSuspend(ReceiveUART_Task);
       }
       if (receivedChar == 'b') {
         Serial.println("Received 'a', giving semaphore...");
@@ -170,7 +165,7 @@ void QRCodeReader( void * pvParameters ){
           } else {
           Serial.printf("Decoding successful:\n");
           dumpData(&data);
-          vTaskSuspend(QRCodeReader_Task);} 
+          } 
           Serial.println();
         } 
       esp_camera_fb_return(fb);
@@ -180,18 +175,18 @@ void QRCodeReader( void * pvParameters ){
     }      
   }
 }
-/* ________________________________________________________________________________ */
 
-/* ________________________________________________________________________________ Function to display the results of reading the QR Code on the serial monitor. */
-void dumpData(const struct quirc_data *data)
-{
+void dumpData(const struct quirc_data *data){
   Serial.printf("Version: %d\n", data->version);
   Serial.printf("ECC level: %c\n", "MLHQ"[data->ecc_level]);
   Serial.printf("Mask: %d\n", data->mask);
   Serial.printf("Length: %d\n", data->payload_len);
-  Serial.printf("Payload: %s\n", data->payload);
-  
+  Serial.printf("Payload: %s\n", data->payload); 
   QRCodeResult = (const char *)data->payload;
 }
 
+
+void SendUart(){
+
+}
 
