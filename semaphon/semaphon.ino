@@ -22,10 +22,9 @@
   #define VSYNC_GPIO_NUM    25
   #define HREF_GPIO_NUM     23
   #define PCLK_GPIO_NUM     22
-#else
-  #error "Camera model not selected"
 #endif
 struct QRCodeData
+
 {
   bool valid;
   int dataType;
@@ -42,7 +41,7 @@ struct quirc_data data;
 quirc_decode_error_t err;
 struct QRCodeData qrCodeData;  
 String QRCodeResult = "";
-BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
 SemaphoreHandle_t xSemaphoreQRScan;
 
 
@@ -54,13 +53,11 @@ TaskHandle_t ReceiveUART_Task;
 void setup(){
   Serial.begin(115200);
   Serial.setDebugOutput(true);
-  Serial.println();
-  Serial.println("Start configuring and initializing the camera...");
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   setup_esp32_cam();
   xSemaphoreQRScan = xSemaphoreCreateBinary();
-  xTaskCreatePinnedToCore(QRCodeReader, "QRCodeReader_Task", 10000, NULL, 1, &QRCodeReader_Task, 0);
-  xTaskCreatePinnedToCore(ReceiveUART_Task,"ReceiveUART_Task", 2048, NULL, 1, &ReceiveUART_Task, 1);
+  xTaskCreatePinnedToCore(QRCodeReader, "QRCodeReader_Task", 10000, NULL, 1, &QRCodeReader_Task,1);
+  xTaskCreatePinnedToCore(ReceiveUART,"ReceiveUART_Task", 2048, NULL, 1, &ReceiveUART_Task, 1);
 }
 
 void loop(){
@@ -96,78 +93,54 @@ void setup_esp32_cam(){
 
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("Camera init failed with error 0x%x", err);
     ESP.restart();
   }
 
   sensor_t * s = esp_camera_sensor_get();
-  if (s->id.PID == OV3660_PID) {
-    s->set_vflip(s, 1);        // flip it back
-    s->set_brightness(s, 1);   // up the brightness just a bit
-    s->set_saturation(s, -2);  // lower the saturation
-  }
   s->set_framesize(s, FRAMESIZE_QVGA);
-
-  Serial.println("Configure and initialize the camera successfully.");
-  Serial.println();
 }
 
-void ReceiveUART_Task(void *pvParameters) {
-  while (1) {
-    // Kiểm tra xem có dữ liệu từ Serial không
-    if (Serial.available() > 0) {
-      char receivedChar = Serial.read();  // Đọc ký tự nhận được từ UART
-      if (receivedChar == 'a') {
-        Serial.println("Received 'a', giving semaphore...");
-        xSemaphoreGive(xSemaphoreQRScan);  // Trả về semaphore
-        
+void ReceiveUART(void *pvParameters) {
+  while(1){
+  if(Serial.available() > 0){
+    String receivedStauts = Serial.readStringUntil('\n');
+      if(receivedStauts == "start"){
+        receivedStauts = "";
+        xSemaphoreGive(xSemaphoreQRScan);
+        vTaskResume(QRCodeReader_Task);
         vTaskSuspend(ReceiveUART_Task);
       }
-      if (receivedChar == 'b') {
-        Serial.println("Received 'a', giving semaphore...");
-        vTaskSuspend(QRCodeReader_Task);
-      }
-      if(receivedChar == 'c') {
-        Serial.println("Received 'a', giving semaphore...");
-        vTaskResume(QRCodeReader_Task);
-      }
     }
-     vTaskDelay(10 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
 void QRCodeReader( void * pvParameters ){
-  Serial.println("QRCodeReader is ready.");
-  Serial.print("QRCodeReader running on core ");
-  Serial.println(xPortGetCoreID());
-  Serial.println();
   if (xSemaphoreTake(xSemaphoreQRScan, portMAX_DELAY) == pdTRUE) {
-  while(1){
-      Serial.println("Task activated, scanning QR code...");
-        fb = esp_camera_fb_get();
-        q = quirc_new();
-        if (!fb){
-          Serial.println("Camera capture failed");
-          esp_camera_fb_return(fb);
-          continue;
-        }   
-        quirc_resize(q, fb->width, fb->height);
-        image = quirc_begin(q, NULL, NULL);
-        memcpy(image, fb->buf, fb->len);
-        quirc_end(q);
-        int count = quirc_count(q);
-        if (count > 0) {
-          quirc_extract(q, 0, &code);
-          err = quirc_decode(&code, &data);
-          if (err){
-          Serial.println("Decoding FAILED");
-          QRCodeResult = "Decoding FAILED";
-          } else {
-          Serial.printf("Decoding successful:\n");
+    while(1){
+      fb = esp_camera_fb_get();
+      q = quirc_new();
+      if (!fb){
+        esp_camera_fb_return(fb);
+        continue;
+      }   
+      quirc_resize(q, fb->width, fb->height);
+      image = quirc_begin(q, NULL, NULL);
+      memcpy(image, fb->buf, fb->len);
+      quirc_end(q);
+      int count = quirc_count(q);
+      if (count > 0) {
+        quirc_extract(q, 0, &code);
+        err = quirc_decode(&code, &data);
+        if (err){
+          // Serial.println("Decoding FAILED");
+          // QRCodeResult = "Decoding FAILED";
+        } else {
           dumpData(&data);
-          } 
-          Serial.println();
+          vTaskResume(ReceiveUART_Task);
+          vTaskSuspend(QRCodeReader_Task);
         } 
+      } 
       esp_camera_fb_return(fb);
       fb = NULL;
       image = NULL;  
@@ -177,16 +150,12 @@ void QRCodeReader( void * pvParameters ){
 }
 
 void dumpData(const struct quirc_data *data){
-  Serial.printf("Version: %d\n", data->version);
-  Serial.printf("ECC level: %c\n", "MLHQ"[data->ecc_level]);
-  Serial.printf("Mask: %d\n", data->mask);
-  Serial.printf("Length: %d\n", data->payload_len);
-  Serial.printf("Payload: %s\n", data->payload); 
+  // Serial.printf("Version: %d\n", data->version);
+  // Serial.printf("ECC level: %c\n", "MLHQ"[data->ecc_level]);
+  // Serial.printf("Mask: %d\n", data->mask);
+  // Serial.printf("Length: %d\n", data->payload_len);
+  // Serial.printf("Payload: %s\n", data->payload); 
   QRCodeResult = (const char *)data->payload;
-}
-
-
-void SendUart(){
-
+  Serial.print(QRCodeResult);
 }
 
