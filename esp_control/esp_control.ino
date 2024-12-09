@@ -1,173 +1,158 @@
-#include <EEPROM.h>
+#include "EEPROM.h"
+#include <ESP32Servo.h>
+#include <LiquidCrystal_I2C.h>
 
-#define RXD2 16
-#define TXD2 17
+LiquidCrystal_I2C lcd(0x27, 20, 4);  
 
-#define stepPin 2
-#define dirPin 3
-#define conveyorBelt 4
+#define EEPROM_SIZE 200
 
-#define line_1 5
-#define line_2 6
-#define line_3 7
-#define position_cam 8
+#define RX2 16
+#define TX2 17
+#define positionCAM 15
+#define positionA 4
+#define positionB 5
+
+#define ServoA 18
+#define ServoB 19
+#define ConveyorBelt 21
+#define LED_Status 2
+
+Servo myServoA, myServoB;
 
 
-TaskHandle_t ReceiveUART_Task;
-TaskHandle_t ControlClassify_Task;
-TaskHandle_t ControlSample_Task;
 
+uint16_t CountA = 0 , CountB = 0 , CountC = 0; 
+
+TaskHandle_t UART_Receive;
+TaskHandle_t Control_TASK;
+TaskHandle_t StatusCam;
+SemaphoreHandle_t xSemaphoreControl;
 SemaphoreHandle_t xSemaphoreUART;
-SemaphoreHandle_t xSemaphoreClassify;
-
-enum Product {
-    PRODUCT_A,
-    PRODUCT_B,
-    PRODUCT_C,
-    PRODUCT_UNKNOWN
-};
-
-int countA = 0;
-int countB = 0;
-int countC = 0;
 
 
-void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(115200);
-  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
+void writeToFlash(const uint16_t value , int addr);
+void controlServo(Servo &s);
 
-  pinMode(stepPin, OUTPUT);
-  pinMode(dirPin, OUTPUT);
+void ReceiveUART(void *pvParameters);
+void Status_CAM(void *pvParameters);
+void Control(void *pvParameters);
 
-  xSemaphoreUART= xSemaphoreCreateBinary();
-  xSemaphoreClassify = xSemaphoreCreateBinary();
+void setup(){
+    Serial.begin(115200);
+    Serial2.begin(4800, SERIAL_8N1, RX2, TX2);
+    EEPROM.begin(EEPROM_SIZE);
+    lcd.init();
+    lcd.backlight();
+    if (EEPROM.read(0)  == 1) { 
+       CountA = EEPROM.read(1);
+       CountB = EEPROM.read(4);
+       CountC = EEPROM.read(7);
+    }  
+    
+     
+    pinMode(LED_Status, OUTPUT);
+    pinMode(ConveyorBelt, OUTPUT);
+    pinMode(positionCAM, INPUT);
+    pinMode(positionA, INPUT);
+    pinMode(positionB, INPUT);
 
-  pinMode(conveyorBelt, OUTPUT);
+    myServoA.attach(ServoA);
+    myServoB.attach(ServoB);
 
-  EEPROM.begin();
-  xTaskCreatePinnedToCore(ReceiveUART, "ReceiveUART_Task", 256, NULL, 1, &ReceiveUART_Task, 0);
-  xTaskCreatePinnedToCore(ControlSample, "ControlSample_Task", 128, NULL, 1, &ControlSample_Task, 0);
-  xTaskCreatePinnedToCore(ControlClassify, "ControlClassify", 512, NULL, 1, &ControlClassify_Task, 0);
-  
+    xSemaphoreControl = xSemaphoreCreateBinary();
+    xSemaphoreUART = xSemaphoreCreateBinary();
+    digitalWrite(LED_Status, HIGH);
+    xTaskCreatePinnedToCore(ReceiveUART, "task1", 2048, NULL, 1, &UART_Receive,1);
+    xTaskCreatePinnedToCore(Control,"task2", 2048, NULL, 1, &Control_TASK, 1);
+    xTaskCreatePinnedToCore(Status_CAM,"task3", 64, NULL, 1, &StatusCam, 1);
+    Serial.println("setup done");
+}
+void loop(){}
+
+
+void Status_CAM(void *pvParameters){
+  while(Serial2.available()){
+    String receivedStauts = Serial2.readStringUntil('\n');
+      if(receivedStauts == "setup_done"){
+        digitalWrite(LED_Status, LOW);
+        receivedStauts = "";
+        Serial.println("START");
+        xSemaphoreGive(xSemaphoreControl);
+        vTaskDelete(StatusCam);
+      }
+    }
 }
 
 void ReceiveUART(void *pvParameters){
-  if (xSemaphoreTake(xSemaphoreUART, portMAX_DELAY) == pdTRUE) {
-      while (Serial2.available()) {
-        String QRCodeResult = Serial2.readStringUntil('!');
-          switch (classifyProduct(QRCodeResult)) {
-            case PRODUCT_A:
-              Serial.println("Processing Product A");
-              countA++;
-              break;
-            case PRODUCT_B:
-              Serial.println("Processing Product B");
-              countB++
-              break;
-            case PRODUCT_C:
-              Serial.println("Processing Product C");
-              countC++
-              break;
-            default:
-              Serial.println("Unknown Product");
-              break;
+    if (xSemaphoreTake(xSemaphoreUART, portMAX_DELAY) == pdTRUE) {
+      while(Serial2.available()){
+        String receivedStauts = Serial2.readStringUntil('\n');
+        Serial.println("đọc mã thành công");
+        Serial.println(receivedStauts);
+        digitalWrite(ConveyorBelt,HIGH);
+         if(receivedStauts == "A"){
+            receivedStauts = "";
+            CountA++;
+            writeToFlash(CountA, 1);
+            if(digitalRead(positionA) == 1){
+              Serial.println("sản phẩm A");
+              controlServo(myServoA);
             }
-          saveCountsToEEPROM();
-          xSemaphoreGive(xSemaphoreClassify); 
-          vTaskResume(ControlClassify_Task);
-          vTaskSuspend(ReceiveUART_Task);
-      }
-  }  
-}
-
-void ControlSample(void *pvParameters){
-  while(1){
-    moveStepper(true, 120);
-    digitalWrite(conveyorBelt, HIGH);
-    if(digitalRead(position_cam) == HIGH){
-      digitalWrite(conveyorBelt, LOW);
-      xSemaphoreGive(xSemaphoreUART); 
-      vTaskSuspend(ControlSample);
-    }
-  }
-}
-
-void ControlClassify(void *pvParameters){
-    if (xSemaphoreTake(xSemaphoreClassify, portMAX_DELAY) == pdTRUE) {
-      while(1){
-        digitalWrite(conveyorBelt, HIGH);
-        switch (classifyProduct(QRCodeResult)){
-            case PRODUCT_A:
-              Serial.println("Processing Product A");
-              if(digitalRead(line_1) == HIGH){
-                controlServo();
-              }
-              break;
-            case PRODUCT_B:
-              Serial.println("Processing Product B");
-              if(digitalRead(line_2) == HIGH){
-                controlServo();
-              }
-              break;
-            case PRODUCT_C:
-              Serial.println("Processing Product C");
-              if(digitalRead(line_3) == HIGH){
-                controlServo();
-              }
-              break;
-            default:
-              Serial.println("Unknown Product");
-              break;
- 
-
+          }
+          else if(receivedStauts == "B"){
+            receivedStauts = "";
+            CountB++;
+            writeToFlash(CountB, 4);
+            if(digitalRead(positionB == 1)){
+              Serial.println("sản phẩm B");
+              controlServo(myServoA);
             }
+          }
+          else if(receivedStauts == "C"){
+            Serial.println("sản phẩm C");
+            receivedStauts = "";
+            CountC++;
+            writeToFlash(CountC, 7);
+          }
           
+          xSemaphoreGive(xSemaphoreControl);
+          vTaskResume(Control_TASK);
+          vTaskSuspend(UART_Receive);
       }
     }
 }
-
-void loop() {
-  // put your main code here, to run repeatedly:
-
+void Control(void *pvParameters){
+    if (xSemaphoreTake(xSemaphoreControl, portMAX_DELAY) == pdTRUE) {
+        while(1){
+          Serial.println("bật băng tải");
+          digitalWrite(ConveyorBelt,HIGH);
+          if(digitalRead(positionCAM) == 1){
+              Serial.println("đọc mã qr code");
+              digitalWrite(ConveyorBelt,LOW);
+              xSemaphoreGive(xSemaphoreUART);
+              vTaskResume(UART_Receive);
+              vTaskSuspend(Control_TASK);
+            }
+         }
+      }
 }
 
-void moveStepper(bool direction, int steps){
-    digitalWrite(dirPin, direction ? HIGH : LOW);
-    for (int i = 0; i < steps; i++) {
-    digitalWrite(stepPin, HIGH);
-    delayMicroseconds(1000); 
-    digitalWrite(stepPin, LOW);
-    delayMicroseconds(1000); 
-  }
+void writeToFlash(const uint16_t value , int addr){
+    EEPROM.write(1,0);
+    EEPROM.write(value, addr);   //  1 -> 3 count A  -- 4 -> 6 count B -- 7 -> 9 count C
+    EEPROM.commit();
 }
 
-void controlServo(){
-      for (int pos = 0; pos <= 180; pos++) {
-        myServo.write(pos);
+void controlServo(Servo &s){
+    for (int pos = 0; pos <= 180; pos++) {
+        s.write(pos);
         delay(15);
     }
    delay(2000);
     for (int pos = 180; pos >= 0; pos--) {
-        myServo.write(pos);
+        s.write(pos);
         delay(15);
     }
 }
-Product classifyProduct(const String& data) {
-    if (data == "product_A") return PRODUCT_A;
-    else if (data == "product_B") return PRODUCT_B;
-    else if (data == "product_C") return PRODUCT_C;
-    else return PRODUCT_UNKNOWN;
-}
-void saveCountsToEEPROM() {
-    EEPROM.put(0, countA); 
-    EEPROM.put(sizeof(int), countB);  
-    EEPROM.put(2 * sizeof(int), countC); 
-    EEPROM.commit(); 
-}
 
-void getERROM(){
-    EEPROM.get(0, countA);
-    EEPROM.get(sizeof(int), countB);
-    EEPROM.get(2 * sizeof(int), countC);
-}
+
