@@ -148,9 +148,22 @@ void ReceiveUART(void *pvParameters) {
       if(receivedStauts == "start"){
         receivedStauts = "";
         Serial.println("TASK QRCODE Render");
+        vTaskDelay();
         xSemaphoreGive(xSemaphoreQRScan);
         vTaskResume(QRCodeReader_Task);
         vTaskSuspend(ReceiveUART_Task);
+      }
+      if(receivedStauts == "L1"){
+          Serial.println("L1");
+      }
+      if(receivedStauts == "L2"){
+          Serial.println("L2");
+      }
+      if(receivedStauts == "L3"){
+          Serial.println("L3");
+      }
+      if(receivedStauts == "L4"){
+          Serial.println("L4");
       }
     }
 }
