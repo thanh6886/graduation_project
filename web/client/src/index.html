@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+
+    <title>APP HEALTH</title>
+    <meta name="author" content="name" />
+    <meta name="description" content="description here" />
+    <meta name="keywords" content="keywords,here" />
+    <link rel="stylesheet" href="./output.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet"/>
+  </head>
+  <body >
+
+
+
+    
+    <div class="main-content  bg-gray-50">
+      <div class="bg-gray-700 pt-3">
+          <div class="rounded-tl-3xl bg-gradient-to-r from-blue-400 to-blue-800 p-4 shadow text-2xl text-white">
+              <h1 class="text-center">Phân Loại Sản Phẩm</h1>
+          </div>
+      </div>
+  
+      <div class="flex flex-wrap">
+          <!-- Sản phẩm A -->
+          <div class="w-full md:w-1/3 xl:w-1/4 p-6">
+              <div class="bg-gradient-to-b from-green-300 to-green-200 border-b-4 border-green-500 rounded-lg shadow-xl p-5">
+                  <div class="flex flex-row items-center">
+                      <div class="flex-shrink pr-4">
+                          <div class="rounded-full p-5 bg-green-500">
+                              <i class="fas fa-box fa-2x fa-inverse"></i>
+                          </div>
+                      </div>
+                      <div class="flex-1 text-right md:text-center">
+                          <h5 class="font-bold uppercase text-gray-700">Sản phẩm A</h5>
+                          <div class="font-bold text-3xl" id="product_a">0</div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <!-- Sản phẩm B -->
+          <div class="w-full md:w-1/3 xl:w-1/4 p-6">
+              <div class="bg-gradient-to-b from-yellow-300 to-yellow-200 border-b-4 border-yellow-500 rounded-lg shadow-xl p-5">
+                  <div class="flex flex-row items-center">
+                      <div class="flex-shrink pr-4">
+                          <div class="rounded-full p-5 bg-yellow-500">
+                              <i class="fas fa-box fa-2x fa-inverse"></i>
+                          </div>
+                      </div>
+                      <div class="flex-1 text-right md:text-center">
+                          <h5 class="font-bold uppercase text-gray-700">Sản phẩm B</h5>
+                          <div class="font-bold text-3xl" id="product_b">0</div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <!-- Sản phẩm C -->
+          <div class="w-full md:w-1/3 xl:w-1/4 p-6">
+              <div class="bg-gradient-to-b from-red-300 to-red-200 border-b-4 border-red-500 rounded-lg shadow-xl p-5">
+                  <div class="flex flex-row items-center">
+                      <div class="flex-shrink pr-4">
+                          <div class="rounded-full p-5 bg-red-500">
+                              <i class="fas fa-box fa-2x fa-inverse"></i>
+                          </div>
+                      </div>
+                      <div class="flex-1 text-right md:text-center">
+                          <h5 class="font-bold uppercase text-gray-700">Sản phẩm C</h5>
+                          <div class="font-bold text-3xl" id="product_c">0</div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <!-- Tổng số sản phẩm -->
+          <div class="w-full md:w-1/3 xl:w-1/4 p-6">
+              <div class="bg-gradient-to-b from-blue-300 to-blue-200 border-b-4 border-blue-500 rounded-lg shadow-xl p-5">
+                  <div class="flex flex-row items-center">
+                      <div class="flex-shrink pr-4">
+                          <div class="rounded-full p-5 bg-blue-500">
+                              <i class="fas fa-boxes fa-2x fa-inverse"></i>
+                          </div>
+                      </div>
+                      <div class="flex-1 text-right md:text-center">
+                          <h5 class="font-bold uppercase text-gray-700">Tổng sản phẩm</h5>
+                          <div class="font-bold text-3xl" id="total_products">0</div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+  
+      <div class="flex justify-evenly">
+          <!-- CAM -->
+          <div class="p-2 rounded-lg">
+              <div class="bg-white border-transparent rounded-lg shadow-xl h-[450px] w-[700px]">
+                  <div class="bg-gradient-to-b from-gray-200 to-gray-100 uppercase text-gray-800 border-b-2 border-gray-300 rounded-tl-lg rounded-tr-lg p-2">
+                      <h5 class="font-bold uppercase text-gray-700 flex justify-center">STREAM CAM</h5>
+                  </div>
+                  <div class="flex items-center justify-center">
+                      <p class="text-gray-500 "></p>
+                      
+                      \
+                    
+                  </div>
+              </div>
+          </div>
+  
+<!-- TRẠNG THÁI -->
+<div class="p-2 rounded-lg">
+    <div class="bg-white border-transparent rounded-lg shadow-xl h-[450px] w-[700px]">
+        <div class="bg-gradient-to-b from-gray-200 to-gray-100 uppercase text-gray-800 border-b-2 border-gray-300 rounded-tl-lg rounded-tr-lg p-2">
+            <h5 class="font-bold uppercase text-gray-700 flex justify-center">TRẠNG THÁI</h5>
+        </div>
+
+
+        <div  class="flex justify-evenly items-center border border-gray-200 p-5 rounded-md">
+            <!-- Nút trạng thái hàng 1 -->
+             <div>
+                    <span class="flex justify-center">CAM</span>
+                    <div class="w-20 h-20 flex items-center justify-center">
+                        <div class="rounded-full h-16 w-16 bg-green-400 shadow-2xl" id="CAM"></div>
+                    </div>
+             </div>
+            
+             <div >
+                <span class="flex justify-center">BĂNG TẢI</span>
+                <div class="w-20 h-20 flex items-center justify-center">
+                    <div class="rounded-full h-16 w-16 bg-green-400 shadow-2xl" id="conveyor_belt"></div>
+                </div>
+             </div>
+        </div>
+
+
+        <div  class="flex justify-evenly items-center border border-gray-200 p-5 rounded-md">
+            <div>
+                <span class="flex justify-center">LOẠI A</span>
+                <div class="w-20 h-20 flex items-center justify-center">
+                    <div class="rounded-full h-16 w-16 bg-green-400 shadow-2xl" id="A"></div>
+                </div>
+           </div>
+            <div>
+            <span class="flex justify-center">LOẠI B</span>
+            <div class="w-20 h-20 flex items-center justify-center">
+                <div class="rounded-full h-16 w-16 bg-green-400 shadow-2xl" id="B"></div>
+            </div>
+           </div>
+        </div>
+
+        <div  class="flex justify-evenly items-center border border-gray-200  rounded-md">
+            <div>
+                <span class="flex justify-center">AUTO</span>
+                <div class="w-20 h-20 flex items-center justify-center">
+                    <div class="rounded-full h-16 w-16 bg-green-400 shadow-2xl" id="Status_MODE"></div>
+                </div>
+           </div>
+        </div>
+        
+            
+     
+        </div>
+    </div>
+    </div>
+</div>
+  
+</body>
+
+<script src="./main.js"></script>
+  </html>

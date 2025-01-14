@@ -4,13 +4,14 @@
 #include "quirc.h"
 
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <stdio.h>
 
-
-
-
+#include "esp_timer.h"
+#include "img_converters.h"
+#include "fb_gfx.h"
+#include "esp_http_server.h"
+#include <ArduinoWebsockets.h>
 
 #define CAMERA_MODEL_AI_THINKER
 
@@ -37,11 +38,11 @@
 #define TX1 15
 
 
-// const char* ssid = "TP-Link_1E09";
-// const char* password = "63718140";
+const char* ssid = "TP-Link_1E09";
+const char* password = "63718140";
 
-const char* ssid = "bethu";
-const char* password = "88888888";
+// const char* ssid = "bethu";
+// const char* password = "88888888";
 
 const char* mqtt_server = "5becba34c368460ba7657c804a6e4eed.s2.eu.hivemq.cloud";
 const char* mqtt_username = "bé_thu";
@@ -92,7 +93,7 @@ void dumpData(const struct quirc_data *data);
 void setup_esp32_cam();
 void ReceiveUART(void *pvParameters);
 void QRCodeReader( void * pvParameters );
-
+void callback(char* topic, byte* payload, unsigned int length);
 HardwareSerial mySerial(1);
 
 struct quirc *q = NULL;
@@ -103,10 +104,20 @@ struct quirc_data data;
 String QRCodeResult = "";
 
 SemaphoreHandle_t xSemaphoreQRScan;
-
-
 TaskHandle_t QRCodeReader_Task; 
 TaskHandle_t ReceiveUART_Task;
+
+
+char * url = "websockets url";
+using namespace websockets;
+WebsocketsClient _client;
+size_t _jpg_buf_len = 0;
+uint8_t * _jpg_buf = NULL;
+uint8_t state = 0;
+void onMessageCallback(WebsocketsMessage message) {
+  Serial.print("Got Message: ");
+  Serial.println(message.data());
+}
 
 
 void setup(){
@@ -133,39 +144,52 @@ void setup(){
   xSemaphoreQRScan = xSemaphoreCreateBinary();
   xTaskCreatePinnedToCore(QRCodeReader, "QRCodeReader_Task", 2048, NULL, 1, &QRCodeReader_Task,1);
   xTaskCreatePinnedToCore(ReceiveUART,"ReceiveUART_Task", 2048, NULL, 1, &ReceiveUART_Task, 1);
+   xTaskCreatePinnedToCore(streamCam,"TEST", 2048, NULL, 1, NULL, 0);
   Serial.println("setup done");
 }
 
 void loop(){
 }
 
-
+void streamCam(void *pvParameters){
+    _client.connect(url);
+   _client.onMessage(onMessageCallback);
+   while(1){
+        if (_client.available()) {
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (!fb) {
+      Serial.println("Camera capture failed");
+      esp_camera_fb_return(fb);
+      ESP.restart();
+    }
+    _client.sendBinary((const char*) fb->buf, fb->len);
+    Serial.println("MJPG sent");
+    esp_camera_fb_return(fb);
+    _client.poll();
+  }
+   vTaskDelay(pdMS_TO_TICKS(5));
+   }
+}
 
 
 void ReceiveUART(void *pvParameters) {
-  while(mySerial.available()){
+  while(1){
+    if(mySerial.available() > 0){
     String receivedStauts = mySerial.readStringUntil('\n');
       if(receivedStauts == "start"){
         receivedStauts = "";
         Serial.println("TASK QRCODE Render");
-        vTaskDelay();
         xSemaphoreGive(xSemaphoreQRScan);
         vTaskResume(QRCodeReader_Task);
         vTaskSuspend(ReceiveUART_Task);
       }
-      if(receivedStauts == "L1"){
-          Serial.println("L1");
-      }
-      if(receivedStauts == "L2"){
-          Serial.println("L2");
-      }
-      if(receivedStauts == "L3"){
-          Serial.println("L3");
-      }
-      if(receivedStauts == "L4"){
-          Serial.println("L4");
-      }
+	  if (receivedStauts.startsWith("L")) {
+		  Serial.println("Message sent: " + receivedStauts);
+		  client.publish("status", receivedStauts.c_str());
+	    }
     }
+     vTaskDelay(pdMS_TO_TICKS(5));
+  }
 }
 
 
@@ -216,12 +240,12 @@ void setup_esp32_cam() {
   config.pin_pclk = PCLK_GPIO_NUM;
   config.pin_vsync = VSYNC_GPIO_NUM;
   config.pin_href = HREF_GPIO_NUM;
-  config.pin_sscb_sda = SIOD_GPIO_NUM;
-  config.pin_sscb_scl = SIOC_GPIO_NUM;
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 10000000;
-  config.pixel_format = PIXFORMAT_GRAYSCALE;  
+  config.pixel_format = PIXFORMAT_JPEG;  
   config.frame_size = FRAMESIZE_QVGA;
   config.jpeg_quality = 15;
   config.fb_count = 1;  
@@ -240,7 +264,7 @@ void setup_esp32_cam() {
 void dumpData(const struct quirc_data *data){ 
   Serial.println("QRCODE OK");
   QRCodeResult = (const char *)data->payload;
-  client.publish("data", QRCodeResult.c_str());
+  client.publish("DATA", QRCodeResult.c_str());
   Serial.println(QRCodeResult);
   mySerial.print(QRCodeResult);
   mySerial.print("\n");
@@ -255,4 +279,7 @@ void MQTT_Connected(){
     }
 }
 void callback(char* topic, byte* payload, unsigned int length){}
+
+
+
 
